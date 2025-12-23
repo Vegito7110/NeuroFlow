@@ -1,0 +1,45 @@
+/* --- Bionic Reading --- */
+b.neuroflow-bionic { font-weight: 700; }
+
+/* --- Clutter-Free Reader Mode --- */
+body.neuroflow-clutter-free {
+    background-color: #fdf6e3 !important; /* Cream background */
+    color: #333 !important;
+    font-family: 'OpenDyslexic', Verdana, sans-serif !important;
+    line-height: 1.8 !important;
+    max-width: 900px !important;
+    margin: 0 auto !important;
+    padding: 20px !important;
+}
+/* Hide common distractions in reader mode */
+body.neuroflow-clutter-free aside, 
+body.neuroflow-clutter-free nav, 
+body.neuroflow-clutter-free .ad-container,
+body.neuroflow-clutter-free iframe {
+    display: none !important;
+}
+
+/* --- Panic Button Overlay --- */
+#neuroflow-panic-overlay {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: #1a202c; z-index: 999999;
+    display: flex; justify-content: center; align-items: center; color: white;
+    flex-direction: column;
+}
+.breathing-circle {
+    width: 100px; height: 100px; background: #4299e1; border-radius: 50%;
+    animation: breathe 8s infinite ease-in-out;
+}
+@keyframes breathe {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(2); opacity: 1; }
+}
+
+/* --- Phonetic Auto-Complete Bubble --- */
+#neuroflow-suggestion-bubble {
+    position: absolute; z-index: 99999;
+    background: white; border: 1px solid #ccc; padding: 8px;
+    border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    font-family: sans-serif; font-size: 14px; color: #333;
+    pointer-events: none; /* Let clicks pass through */
+}
