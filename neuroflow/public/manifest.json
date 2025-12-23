@@ -1,15 +1,18 @@
 {
   "manifest_version": 3,
-  "name": "NeuroFlow: Focus & Inclusion Assistant",
-  "version": "1.1",
-  "description": "AI-powered tools for neurodiverse focus.",
-  "permissions": ["activeTab", "scripting", "storage"],
+  "name": "NeuroFlow",
+  "version": "1.0",
+  "permissions": ["sidePanel", "scripting", "activeTab"],
   "host_permissions": ["<all_urls>"],
-  "action": {
-    "default_popup": "index.html"
-  },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "action": {
+    "default_title": "Open NeuroFlow"
   },
   "content_scripts": [
     {
@@ -17,5 +20,8 @@
       "js": ["content.js"],
       "css": ["content.css"]
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co https://raw.githubusercontent.com https://cdn.jsdelivr.net http://127.0.0.1:8000"
+  }
 }
