@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Eye, Layers, AlertCircle, Brain, Aperture, PenTool } from 'lucide-react';
 import TaskSuggestion from './components/TaskSuggestion';
 
-import AIWorker from './worker.js';
+import AIWorker from './worker?worker';
 
 function App() {
   const [worker] = useState(() => new AIWorker());
@@ -10,7 +10,6 @@ function App() {
   // State for UI Toggles
   const [bionicMode, setBionicMode] = useState(false);
   const [clutterFreeMode, setClutterFreeMode] = useState(false);
-  const [focusTunnelMode, setFocusTunnelMode] = useState(false);
   const [editorVisible, setEditorVisible] = useState(false);
   const [energyLevel, setEnergyLevel] = useState(5);
   const [aiStatus, setAiStatus] = useState("Offline");
@@ -98,15 +97,6 @@ function App() {
             <span className="text-slate-700 font-medium">Clutter-Free</span>
           </div>
           <ToggleBtn active={clutterFreeMode} onClick={() => handleToggle(setClutterFreeMode, clutterFreeMode, "TOGGLE_CLUTTER_FREE")} />
-        </div>
-
-        {/* Focus Tunnel Toggle */}
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Aperture size={20} className="text-purple-600" />
-            <span className="text-slate-700 font-medium">Focus Tunnel</span>
-          </div>
-          <ToggleBtn active={focusTunnelMode} onClick={() => handleToggle(setFocusTunnelMode, focusTunnelMode, "TOGGLE_FOCUS_TUNNEL")} />
         </div>
       </section>
 

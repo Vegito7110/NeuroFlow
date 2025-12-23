@@ -7,38 +7,24 @@ function toggleBionicReader(active) {
     const content = document.querySelectorAll('p, li, h1, h2, h3, h4, span, div');
     
     content.forEach(element => {
-        // Skip our own widget and invisible elements
-        if (element.closest('#neuroflow-editor-widget') || 
-            element.closest('#neuroflow-tunnel') ||
-            element.offsetParent === null) return;
+        if (element.closest('#neuroflow-editor-widget') || element.offsetParent === null) return;
 
         if (active) {
-            // Save original text if not saved
             if (!element.dataset.nfOriginal) {
                 element.dataset.nfOriginal = element.innerHTML;
             }
-
-            // Process text nodes only to avoid breaking HTML tags
             const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
             let node;
             const nodesToReplace = [];
-
             while (node = walker.nextNode()) {
-                if (node.nodeValue.trim().length > 0) {
-                    nodesToReplace.push(node);
-                }
+                if (node.nodeValue.trim().length > 0) nodesToReplace.push(node);
             }
-
             nodesToReplace.forEach(node => {
                 const span = document.createElement('span');
                 span.innerHTML = processBionicWord(node.nodeValue);
-                if (node.parentNode) {
-                    node.parentNode.replaceChild(span, node);
-                }
+                if (node.parentNode) node.parentNode.replaceChild(span, node);
             });
-
         } else {
-            // Restore original text
             if (element.dataset.nfOriginal) {
                 element.innerHTML = element.dataset.nfOriginal;
                 delete element.dataset.nfOriginal;
@@ -56,39 +42,7 @@ function processBionicWord(text) {
 }
 
 // ==============================================
-// 2. FOCUS TUNNEL (VIGNETTE MODE)
-// ==============================================
-let tunnelOverlay = null;
-
-function toggleFocusTunnel(active) {
-    if (active) {
-        if (!tunnelOverlay) {
-            tunnelOverlay = document.createElement('div');
-            tunnelOverlay.id = 'neuroflow-tunnel';
-            Object.assign(tunnelOverlay.style, {
-                position: 'fixed', top: '0', left: '0', width: '100vw', height: '100vh',
-                pointerEvents: 'none', zIndex: '2147483646',
-                mixBlendMode: 'multiply', transition: 'background 0.1s ease'
-            });
-            document.body.appendChild(tunnelOverlay);
-            document.addEventListener('mousemove', updateTunnelPosition);
-        }
-        tunnelOverlay.style.display = 'block';
-    } else {
-        if (tunnelOverlay) {
-            tunnelOverlay.style.display = 'none';
-            document.removeEventListener('mousemove', updateTunnelPosition);
-        }
-    }
-}
-
-function updateTunnelPosition(e) {
-    if (!tunnelOverlay) return;
-    tunnelOverlay.style.background = `radial-gradient(circle at ${e.clientX}px ${e.clientY}px, transparent 150px, rgba(0,0,0,0.85) 400px)`;
-}
-
-// ==============================================
-// 3. EDITOR OVERLAY
+// 2. EDITOR OVERLAY (UPDATED UI)
 // ==============================================
 let editorWidget = null;
 
@@ -108,27 +62,38 @@ function createEditorWidget() {
     const shadow = editorWidget.attachShadow({ mode: 'open' });
     const container = document.createElement('div');
     container.className = 'widget-container';
+    
+    // UI: Input on top, Suggestion Box on bottom
     container.innerHTML = `
         <div class="header">
             <span>🧠 NeuroFlow</span>
             <button id="close-btn">×</button>
         </div>
         <div class="content">
-            <textarea placeholder="Type here... (Phonetic AI active)" id="nf-input"></textarea>
-            <div id="nf-ghost" class="ghost-text"></div>
+            <textarea placeholder="Type here..." id="nf-input"></textarea>
         </div>
-        <div class="footer"><span id="status">AI Ready</span></div>
+        <div class="suggestion-area">
+            <div class="label">AI Suggestion (Press Tab to Accept):</div>
+            <div id="nf-ghost" class="ghost-text"></div>
+            <div id="nf-status" class="status-text">Ready</div>
+        </div>
     `;
 
     const style = document.createElement('style');
     style.textContent = `
-        .widget-container { position: fixed; bottom: 20px; right: 20px; width: 320px; height: 400px; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); display: flex; flex-direction: column; font-family: sans-serif; border: 2px solid #6366f1; z-index: 2147483647; }
-        .header { background: #6366f1; color: white; padding: 10px; border-radius: 10px 10px 0 0; font-weight: bold; display: flex; justify-content: space-between; }
-        #close-btn { background:none; border:none; color:white; cursor: pointer; font-size: 1.5rem; }
-        .content { position: relative; flex: 1; padding: 10px; }
-        textarea { width: 100%; height: 100%; border: none; outline: none; resize: none; background: transparent; position: relative; z-index: 2; font-size: 16px; font-family: sans-serif; }
-        .ghost-text { position: absolute; top: 10px; left: 10px; color: #aaa; z-index: 1; pointer-events: none; font-size: 16px; font-family: sans-serif; white-space: pre-wrap; }
-        .footer { padding: 8px; border-top: 1px solid #eee; font-size: 12px; color: #666; background: #fff; border-radius: 0 0 12px 12px; }
+        .widget-container { 
+            position: fixed; bottom: 20px; right: 20px; width: 340px; height: 450px; 
+            background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); 
+            display: flex; flex-direction: column; font-family: sans-serif; border: 2px solid #6366f1; z-index: 2147483647; 
+        }
+        .header { background: #6366f1; color: white; padding: 12px; border-radius: 10px 10px 0 0; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        #close-btn { background: none; border: none; color: white; cursor: pointer; font-size: 1.5rem; }
+        .content { flex: 1; padding: 12px; border-bottom: 1px solid #eee; }
+        textarea { width: 100%; height: 100%; border: none; outline: none; resize: none; background: transparent; font-size: 16px; font-family: sans-serif; color: #333; }
+        .suggestion-area { height: 120px; background: #f8fafc; padding: 12px; border-radius: 0 0 12px 12px; display: flex; flex-direction: column; }
+        .label { font-size: 10px; text-transform: uppercase; color: #94a3b8; font-weight: bold; margin-bottom: 5px; }
+        .ghost-text { color: #2563eb; font-size: 16px; font-weight: 500; flex: 1; overflow-y: auto; white-space: pre-wrap; }
+        .status-text { font-size: 10px; color: #cbd5e1; text-align: right; margin-top: 5px; }
     `;
 
     shadow.appendChild(style);
@@ -137,48 +102,60 @@ function createEditorWidget() {
 
     shadow.getElementById('close-btn').onclick = () => editorWidget.style.display = 'none';
 
-    // AI Logic
+    // --- AI LOGIC ---
     const input = shadow.getElementById('nf-input');
     const ghost = shadow.getElementById('nf-ghost');
+    const status = shadow.getElementById('nf-status');
     let typingTimer;
 
     input.addEventListener('input', (e) => {
         const text = e.target.value;
-        ghost.innerText = "";
+        status.innerText = "Typing...";
+        
         clearTimeout(typingTimer);
-        typingTimer = setTimeout(() => {
-            if (text.length > 3 && chrome.runtime?.id) {
-                chrome.runtime.sendMessage({ action: "ANALYZE_TEXT_REQUEST", text: text });
+        typingTimer = setTimeout(async () => {
+            if (text.length > 3) {
+                status.innerText = "Sending to AI...";
+                try {
+                    // Try to send to Side Panel
+                    await chrome.runtime.sendMessage({ action: "ANALYZE_TEXT_REQUEST", text: text });
+                    status.innerText = "Sent";
+                } catch (err) {
+                    // IF SIDE PANEL IS CLOSED
+                    status.innerText = "⚠️ Open Side Panel!";
+                    ghost.innerText = "Error: Please open the NeuroFlow Side Panel to start the AI.";
+                }
             }
         }, 500);
     });
 
+    // Accept Suggestion (Tab)
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            if (ghost.innerText.trim().length > 0 && !ghost.innerText.startsWith("Error")) {
+                e.preventDefault();
+                input.value = ghost.innerText;
+                ghost.innerText = "";
+            }
+        }
+    });
+
     chrome.runtime.onMessage.addListener((request) => {
-        if (request.action === "SHOW_PREDICTION" && request.value) {
+        if (request.action === "SHOW_PREDICTION") {
             ghost.innerText = request.value;
+            status.innerText = "Suggestion Ready";
         }
     });
 }
 
 // ==============================================
-// 4. MAIN MESSAGE LISTENER
+// 3. MAIN LISTENER
 // ==============================================
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request) => {
     switch (request.action) {
-        case "TOGGLE_BIONIC":
-            toggleBionicReader(request.value);
-            break;
-        case "TOGGLE_CLUTTER_FREE":
-            document.body.classList.toggle('neuroflow-clutter-free', request.value);
-            break;
-        case "TOGGLE_FOCUS_TUNNEL":
-            toggleFocusTunnel(request.value);
-            break;
-        case "TOGGLE_EDITOR":
-            toggleEditorWidget(request.value);
-            break;
-        case "TRIGGER_PANIC_AI":
-            alert("Panic Mode Activated: Take a deep breath. Focus reset initiated.");
-            break;
+        case "TOGGLE_BIONIC": toggleBionicReader(request.value); break;
+        case "TOGGLE_CLUTTER_FREE": document.body.classList.toggle('neuroflow-clutter-free', request.value); break;
+        case "TOGGLE_EDITOR": toggleEditorWidget(request.value); break;
+        case "TRIGGER_PANIC_AI": alert("Panic Mode Activated: Breathe in..."); break;
     }
 });
