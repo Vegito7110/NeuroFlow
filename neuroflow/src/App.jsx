@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Eye, Layers, AlertCircle, Brain, Aperture, PenTool } from 'lucide-react';
 import TaskSuggestion from './components/TaskSuggestion';
 
-import AIWorker from './worker?worker';
+import AIWorker from './worker.js';
 
 function App() {
   const [worker] = useState(() => new AIWorker());

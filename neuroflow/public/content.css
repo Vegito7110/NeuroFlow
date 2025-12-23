@@ -1,21 +1,25 @@
-/* --- Bionic Reading --- */
-b.neuroflow-bionic { font-weight: 700; }
+/* public/content.css */
 
-/* --- Clutter-Free Reader Mode --- */
+/* Bionic Reading Boldness */
+b { font-weight: 700 !important; }
+
+/* Clutter Free Mode */
 body.neuroflow-clutter-free {
-    background-color: #fdf6e3 !important; /* Cream background */
-    color: #333 !important;
-    font-family: 'OpenDyslexic', Verdana, sans-serif !important;
-    line-height: 1.8 !important;
-    max-width: 900px !important;
+    max-width: 800px !important;
     margin: 0 auto !important;
-    padding: 20px !important;
+    background-color: #fdf6e3 !important; /* Cream Color */
+    color: #2d3436 !important;
+    font-family: 'OpenDyslexic', 'Comic Sans MS', sans-serif !important;
+    line-height: 2 !important;
+    font-size: 18px !important;
 }
-/* Hide common distractions in reader mode */
-body.neuroflow-clutter-free aside, 
-body.neuroflow-clutter-free nav, 
-body.neuroflow-clutter-free .ad-container,
-body.neuroflow-clutter-free iframe {
+
+/* Hide distractions in Clutter Free */
+body.neuroflow-clutter-free iframe,
+body.neuroflow-clutter-free aside,
+body.neuroflow-clutter-free nav,
+body.neuroflow-clutter-free .ad,
+body.neuroflow-clutter-free footer {
     display: none !important;
 }
 
