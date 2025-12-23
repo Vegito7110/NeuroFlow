@@ -4,7 +4,10 @@
 // 1. BIONIC READING ENGINE
 // ==============================================
 function toggleBionicReader(active) {
-    const content = document.querySelectorAll('p, li, h1, h2, h3, h4, span, div');
+    const content = document.querySelectorAll(
+  'article p, main p, section p, li, h1, h2, h3'
+);
+
     
     content.forEach(element => {
         if (element.closest('#neuroflow-editor-widget') || element.offsetParent === null) return;
