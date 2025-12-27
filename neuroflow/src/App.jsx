@@ -1,40 +1,58 @@
-import React, { useState } from 'react';
-import { Eye, Layers, AlertCircle, Brain } from 'lucide-react';
+import React from 'react';
+import { Eye, Layers, AlertCircle, Brain, Loader2 } from 'lucide-react'; 
 import TaskSuggestion from './components/TaskSuggestion';
+// Import the new hook
+import { useChromeStorage } from './hooks/useChromeStorage'; 
 
 function App() {
-  const [bionicMode, setBionicMode] = useState(false);
-  const [clutterFreeMode, setClutterFreeMode] = useState(false);
-  // Default to 5 (Integer)
-  const [energyLevel, setEnergyLevel] = useState(5);
+  // REPLACE useState with useChromeStorage
+  // The first argument is the unique key for saving
+  const [bionicMode, setBionicMode] = useChromeStorage("settings_bionic", false);
+  const [clutterFreeMode, setClutterFreeMode] = useChromeStorage("settings_clutter", false);
+  const [energyLevel, setEnergyLevel] = useChromeStorage("settings_energy", 5);
+  
+  const [isPanicking, setIsPanicking] = React.useState(false); // This doesn't need to be saved
 
-  // Helper to send messages to the content script/background script
-  const sendMessage = async (action, value = null) => {
+  const sendMessageToContentScript = async (action, data = null) => {
     if (typeof chrome !== "undefined" && chrome.tabs) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, { action, value });
+        chrome.tabs.sendMessage(tab.id, { action, data });
       }
-    } else {
-      console.warn("Chrome API not detected (Running outside extension?)");
     }
   };
 
   const handleToggle = (setter, state, actionName) => {
     const newState = !state;
     setter(newState);
-    sendMessage(actionName, newState);
+    sendMessageToContentScript(actionName, { value: newState });
+  };
+
+  const handlePanicClick = async () => {
+    setIsPanicking(true);
+    try {
+        // 1. Fetch AI Calming Text
+        const res = await fetch("http://127.0.0.1:8000/api/v1/panic-reset", { method: "POST" });
+        const aiData = await res.json();
+        
+        // 2. Send to Content Script
+        sendMessageToContentScript("TRIGGER_PANIC", aiData);
+    } catch (err) {
+        console.error("Panic Fetch Failed", err);
+        // Fallback: Send empty data (Content script will use defaults)
+        sendMessageToContentScript("TRIGGER_PANIC", {});
+    } finally {
+        setIsPanicking(false);
+    }
   };
 
   return (
-    <div className="p-4 bg-slate-50 min-h-screen">
-      {/* Header */}
+    <div className="p-4 bg-slate-50 min-h-screen w-[350px]">
       <header className="flex items-center gap-2 mb-6 border-b pb-4 border-slate-200">
         <Brain className="text-blue-600" size={28} />
         <h1 className="text-xl font-bold text-slate-800">NeuroFlow</h1>
       </header>
 
-      {/* Toggles Section */}
       <section className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-6 space-y-4">
         <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Reading Tools</h2>
         
@@ -65,41 +83,30 @@ function App() {
         </div>
       </section>
 
-      {/* Mood & Energy Section */}
       <section className="mb-6">
          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Energy Check-in</h2>
          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-4">
-            <label className="block text-sm text-slate-600 mb-2 flex justify-between">
-              <span>Sluggish (1)</span> <span>Hyper-focused (10)</span>
-            </label>
             <input 
               type="range" min="1" max="10" value={energyLevel} 
-              // Note: Inputs return strings, but TaskSuggestion.jsx now handles the parseInt
               onChange={(e) => setEnergyLevel(e.target.value)}
               className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
             />
             <div className="text-center mt-2 font-bold text-blue-800">Energy Level: {energyLevel}</div>
          </div>
-         
-         {/* Pass the state down to the component we just fixed */}
          <TaskSuggestion energyLevel={energyLevel} />
       </section>
 
-      {/* Panic Button Section */}
       <section>
         <button 
-          /* UPDATE: If you implemented the Phase 3 backend logic in background.js, 
-             change this to "TRIGGER_PANIC_AI". 
-             If you only have Phase 2 logic, keep it "TRIGGER_PANIC".
-          */
-          onClick={() => sendMessage("TRIGGER_PANIC_AI")} 
-          className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95">
-          <AlertCircle size={24} />
-          Wait, I'm Overwhelmed!
+          onClick={handlePanicClick}
+          disabled={isPanicking}
+          className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-70">
+          {isPanicking ? <Loader2 className="animate-spin" /> : <AlertCircle size={24} />}
+          {isPanicking ? "Breathing..." : "Wait, I'm Overwhelmed!"}
         </button>
       </section>
     </div>
   )
 }
 
-export default App
+export default App;

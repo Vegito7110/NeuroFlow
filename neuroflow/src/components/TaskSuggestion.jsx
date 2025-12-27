@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // Import useEffect
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, Battery, BatteryFull } from 'lucide-react';
 
 const TaskSuggestion = ({ energyLevel }) => {
@@ -13,29 +13,24 @@ const TaskSuggestion = ({ energyLevel }) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-             energy_level: parseInt(energyLevel), // Ensure it's a number
+             energy_level: parseInt(energyLevel),
              current_mood: "focused" 
           })
         });
         
         if (res.ok) {
             const data = await res.json();
-            setAiTasks(data.suggested_tasks); // Use the key from TaskResponse
-            setAdvice(data.advice);
-            setZone(data.zone);
-        } else {
-            console.error("Server Error:", await res.text());
+            setAiTasks(data.suggested_tasks || []);
+            setAdvice(data.advice || "");
+            setZone(data.zone || "");
         }
       } catch (error) {
         console.error("Fetch failed:", error);
       }
     }
     
-    // Simple debounce to prevent calling API on every slider slide
-    const timer = setTimeout(() => {
-        fetchTasks();
-    }, 500);
-
+    // Debounce: Wait 500ms after sliding stops before calling API
+    const timer = setTimeout(() => fetchTasks(), 500);
     return () => clearTimeout(timer);
   }, [energyLevel]);
 
@@ -52,13 +47,12 @@ const TaskSuggestion = ({ energyLevel }) => {
             <h3 className={`font-semibold ${textColor}`}>
                {zone || (isHighEnergy ? "High Energy" : "Low Energy")}
             </h3>
-            {/* Advice Text */}
             {advice && <p className="text-xs text-slate-600 mt-1">{advice}</p>}
         </div>
       </div>
       
       <ul className="space-y-2">
-        {aiTasks && aiTasks.length > 0 ? (
+        {aiTasks.length > 0 ? (
             aiTasks.map((task, index) => (
             <li key={index} className="flex items-center gap-2 bg-white p-2 rounded shadow-sm text-sm text-gray-700">
                 <CheckCircle2 size={16} className="text-gray-400" /> {task}
