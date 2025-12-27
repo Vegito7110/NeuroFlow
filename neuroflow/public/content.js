@@ -149,13 +149,69 @@ function createEditorWidget() {
 }
 
 // ==============================================
-// 3. MAIN LISTENER
+// 3. PANIC MODE OVERLAY
+// ==============================================
+function triggerPanicRoutine(aiData) {
+    // 1. Clean up existing overlays
+    const old = document.getElementById('neuroflow-panic-overlay');
+    if (old) old.remove();
+
+    // 2. Prepare Data (AI or Default)
+    const message = aiData?.calming_message || "Deep Breath In...";
+    const step = aiData?.micro_step || "Just close your eyes for 5 seconds.";
+
+    // 3. Create Overlay DOM
+    const overlay = document.createElement("div");
+    overlay.id = "neuroflow-panic-overlay";
+    overlay.innerHTML = `
+        <div class="neuroflow-breathing-circle"></div>
+        <h2 style="color:#1e293b; margin: 0 0 10px 0; font-size: 32px; text-align:center; font-weight:700;">${message}</h2>
+        <p style="font-size:20px; color:#64748b; text-align:center; max-width: 600px; margin-bottom: 40px; line-height: 1.5;">${step}</p>
+        <button id="neuroflow-panic-close" style="
+            padding: 15px 40px; 
+            background: #3b82f6; 
+            border: none; 
+            border-radius: 50px; 
+            color: white; 
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.4);
+            transition: transform 0.2s;
+        ">I'm Ready</button>
+        <div style="position:absolute; bottom: 30px; font-size: 14px; color: #94a3b8;">Press ESC to close</div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    // 4. Activate & Focus
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+    const closeBtn = document.getElementById("neuroflow-panic-close");
+    closeBtn.focus();
+
+    // 5. Close Handlers
+    const closeRoutine = () => {
+        overlay.classList.remove('visible');
+        setTimeout(() => overlay.remove(), 300);
+        document.removeEventListener('keydown', escHandler);
+    };
+
+    closeBtn.onclick = closeRoutine;
+
+    // ESC Key Listener (Accessibility)
+    const escHandler = (e) => {
+        if (e.key === "Escape") closeRoutine();
+    };
+    document.addEventListener('keydown', escHandler);
+}
+// ==============================================
+// 4. MAIN LISTENER
 // ==============================================
 chrome.runtime.onMessage.addListener((request) => {
     switch (request.action) {
         case "TOGGLE_BIONIC": toggleBionicReader(request.value); break;
         case "TOGGLE_CLUTTER_FREE": document.body.classList.toggle('neuroflow-clutter-free', request.value); break;
         case "TOGGLE_EDITOR": toggleEditorWidget(request.value); break;
-        case "TRIGGER_PANIC_AI": alert("Panic Mode Activated: Breathe in..."); break;
+        case "TRIGGER_PANIC_AI": triggerPanicRoutine(request.value); break;
     }
 });
