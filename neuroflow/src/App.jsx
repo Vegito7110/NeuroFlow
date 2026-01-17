@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, Layers, AlertCircle, Brain, Aperture, PenTool } from 'lucide-react';
-import TaskSuggestion from './components/TaskSuggestion';
-
+import { Eye, Layers, AlertCircle, Brain, PenTool, FileText, Loader2 } from 'lucide-react';
 import AIWorker from './worker?worker';
 
 function App() {
@@ -11,29 +9,74 @@ function App() {
   const [bionicMode, setBionicMode] = useState(false);
   const [clutterFreeMode, setClutterFreeMode] = useState(false);
   const [editorVisible, setEditorVisible] = useState(false);
-  const [energyLevel, setEnergyLevel] = useState(5);
   const [aiStatus, setAiStatus] = useState("Offline");
+
+  // ================= SUMMARY STATE (NEW) =================
+  const [summary, setSummary] = useState(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState(null);
+
   // ================= TASK STATE =================
   const [tasks, setTasks] = useState([]);
   const [taskInput, setTaskInput] = useState("");
   const [completedTasks, setCompletedTasks] = useState([]);
   const [showCompleted, setShowCompleted] = useState(false);
 
+  // ================= API HANDLER (NEW) =================
+  const handleSummarize = async () => {
+    setIsSummarizing(true);
+    setSummaryError(null);
+    setSummary(null);
+
+    try {
+      // 1. Get Current Tab URL
+      let currentUrl = "https://example.com"; // Fallback for local React testing
+      
+      if (typeof chrome !== "undefined" && chrome.tabs) {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.url) currentUrl = tab.url;
+      }
+
+      // 2. Call your Python Backend (Localhost for testing)
+      const response = await fetch("http://localhost:8000/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: currentUrl,
+          task_type: "summarize"
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.status === "success") {
+        setSummary(data.data); // The bullet points string
+      } else {
+        setSummaryError(data.detail || "Failed to generate summary");
+      }
+
+    } catch (err) {
+      console.error(err);
+      setSummaryError("Could not connect to AI Backend. Is it running?");
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
   // ================= TASK HANDLERS =================
   const addTask = () => {
     if (!taskInput.trim()) return;
     if (tasks.length >= 4) return;
-
     setTasks(prev => [...prev, taskInput.trim()]);
     setTaskInput("");
   };
 
   const removeTask = (index) => {
     const taskToComplete = tasks[index];
-
     setTasks(prev => prev.filter((_, i) => i !== index));
     setCompletedTasks(prev => [...prev, taskToComplete]);
   };
+
   useEffect(() => {
     // A. Start the AI immediately when Side Panel opens
     worker.postMessage({ type: "INIT_AI" });
@@ -45,7 +88,6 @@ function App() {
       if (data.status === "READY") setAiStatus("Online 🟢");
       
       if (data.prediction) {
-        // AI gave an answer! Send it to the webpage (content.js)
         sendMessageToContentScript("SHOW_PREDICTION", data.prediction);
       }
     };
@@ -53,12 +95,10 @@ function App() {
     // C. Listen for messages FROM the Webpage (content.js)
     const handleMessageFromContentScript = (request, sender, sendResponse) => {
       if (request.action === "ANALYZE_TEXT_REQUEST") {
-        // The user typed something in the page. Ask the Worker.
         worker.postMessage({ type: "PREDICT", text: request.text });
       }
     };
 
-    // Chrome Runtime Listener
     if (typeof chrome !== "undefined" && chrome.runtime) {
       chrome.runtime.onMessage.addListener(handleMessageFromContentScript);
     }
@@ -70,7 +110,6 @@ function App() {
     };
   }, [worker]);
 
-  // Helper to send updates to content.js (Toggles)
   const sendMessageToContentScript = async (action, value = null) => {
     if (typeof chrome !== "undefined" && chrome.tabs) {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -87,7 +126,7 @@ function App() {
   };
 
   return (
-    <div className="p-4 bg-slate-50 min-h-screen font-sans">
+    <div className="p-4 bg-slate-50 min-h-screen font-sans w-full max-w-md mx-auto">
       {/* Header */}
       <header className="flex items-center justify-between mb-6 border-b pb-4 border-slate-200">
         <div className="flex items-center gap-2">
@@ -96,6 +135,46 @@ function App() {
         </div>
         <span className="text-xs font-mono text-slate-500">{aiStatus}</span>
       </header>
+
+      {/* --- NEW: AI SUMMARY FEATURE --- */}
+      <section className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+            <FileText size={20} className="text-purple-600" />
+            <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Page Summary</h2>
+        </div>
+        
+        {!summary && !isSummarizing && (
+            <button 
+                onClick={handleSummarize}
+                className="w-full py-2 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 font-semibold rounded-lg text-sm transition-colors border border-purple-200 flex items-center justify-center gap-2"
+            >
+                Generate Summary
+            </button>
+        )}
+
+        {isSummarizing && (
+            <div className="flex items-center justify-center gap-2 text-slate-500 text-sm py-4">
+                <Loader2 className="animate-spin" size={18} />
+                Reading page...
+            </div>
+        )}
+
+        {summaryError && (
+            <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg border border-red-100 mt-2">
+                {summaryError}
+            </div>
+        )}
+
+        {summary && (
+            <div className="mt-2 bg-slate-50 p-3 rounded-lg border border-slate-100 text-sm text-slate-700 whitespace-pre-line leading-relaxed">
+                <div className="flex justify-between items-start mb-2">
+                    <span className="font-semibold text-xs text-slate-400 uppercase">AI Insights</span>
+                    <button onClick={() => setSummary(null)} className="text-xs text-slate-400 hover:text-slate-600">Clear</button>
+                </div>
+                {summary}
+            </div>
+        )}
+      </section>
 
       {/* READING TOOLS */}
       <section className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-6 space-y-4">
@@ -144,7 +223,6 @@ function App() {
         </h2>
 
         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-3">
-
           <div className="flex gap-2">
             <input
               type="text"
@@ -176,7 +254,6 @@ function App() {
                   readOnly
                   className="accent-blue-600 cursor-pointer"
                 />
-
                 <span className="text-sm text-slate-700">{task}</span>
               </li>
             ))}
@@ -199,8 +276,6 @@ function App() {
             </p>
           )}
 
-
-
           {showCompleted && (
             <ul className="mt-3 space-y-2">
               {completedTasks.map((task, index) => (
@@ -213,7 +288,6 @@ function App() {
               ))}
             </ul>
           )}
-
         </div>
       </section>
 
