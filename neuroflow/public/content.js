@@ -3,42 +3,119 @@
 // ==============================================
 // 1. BIONIC READING ENGINE
 // ==============================================
-function toggleBionicReader(active) {
-    const content = document.querySelectorAll('p, li, h1, h2, h3, h4, span, div');
-    
-    content.forEach(element => {
-        if (element.closest('#neuroflow-editor-widget') || element.offsetParent === null) return;
+// 1. Store the original state so we don't process the same node twice
+const processedNodes = new WeakSet();
 
-        if (active) {
-            if (!element.dataset.nfOriginal) {
-                element.dataset.nfOriginal = element.innerHTML;
-            }
-            const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
-            let node;
-            const nodesToReplace = [];
-            while (node = walker.nextNode()) {
-                if (node.nodeValue.trim().length > 0) nodesToReplace.push(node);
-            }
-            nodesToReplace.forEach(node => {
-                const span = document.createElement('span');
-                span.innerHTML = processBionicWord(node.nodeValue);
-                if (node.parentNode) node.parentNode.replaceChild(span, node);
-            });
-        } else {
-            if (element.dataset.nfOriginal) {
-                element.innerHTML = element.dataset.nfOriginal;
-                delete element.dataset.nfOriginal;
-            }
-        }
-    });
+function toggleBionicReading(enable) {
+  if (enable) {
+    applyBionicReading(document.body);
+  } else {
+    removeBionicReading();
+  }
 }
 
-function processBionicWord(text) {
-    return text.split(' ').map(word => {
-        if (word.length < 2) return word;
-        const mid = Math.ceil(word.length / 2);
-        return `<b>${word.slice(0, mid)}</b>${word.slice(mid)}`;
-    }).join(' ');
+function applyBionicReading(element) {
+  // Walker to find all text nodes
+  const walker = document.createTreeWalker(
+    element,
+    NodeFilter.SHOW_TEXT,
+    null,
+    false
+  );
+
+  let node;
+  const nodesToReplace = [];
+
+  while ((node = walker.nextNode())) {
+    // Skip if empty, already processed, or inside a script/style tag
+    if (
+      !node.nodeValue.trim() ||
+      processedNodes.has(node) ||
+      ['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT'].includes(node.parentElement.tagName) ||
+      node.parentElement.isContentEditable
+    ) {
+      continue;
+    }
+    nodesToReplace.push(node);
+  }
+
+  // Process nodes
+  nodesToReplace.forEach((textNode) => {
+    const words = textNode.nodeValue.split(' ');
+    
+    // Create a container fragment
+    const fragment = document.createDocumentFragment();
+
+    words.forEach((word, index) => {
+      if (word.trim().length > 0) {
+        // Calculate split point (first half of word)
+        const splitIndex = Math.ceil(word.length / 2);
+        const boldPart = word.slice(0, splitIndex);
+        const normalPart = word.slice(splitIndex);
+
+        // Create the BOLD element (using a span with a marker class)
+        const bionicSpan = document.createElement('span');
+        bionicSpan.className = 'neuroflow-bionic-word'; // MARKER CLASS
+        bionicSpan.style.fontWeight = 'bold';
+        bionicSpan.textContent = boldPart;
+
+        // Create the normal text node
+        const normalNode = document.createTextNode(normalPart);
+
+        fragment.appendChild(bionicSpan);
+        fragment.appendChild(normalNode);
+      } else {
+        // Preserve spaces
+        fragment.appendChild(document.createTextNode(word));
+      }
+
+      // Re-add space after word if it wasn't the last one
+      if (index < words.length - 1) {
+        fragment.appendChild(document.createTextNode(' '));
+      }
+    });
+
+    // Replace the original text node with our new fancy fragment
+    if (textNode.parentNode) {
+      textNode.parentNode.replaceChild(fragment, textNode);
+      processedNodes.add(textNode); // Mark as processed
+    }
+  });
+}
+
+function removeBionicReading() {
+  // 1. Find all elements we created using our specific class
+  const bionicElements = document.querySelectorAll('.neuroflow-bionic-word');
+
+  bionicElements.forEach((span) => {
+    // The structure we built is: [SPAN(Bold)][TextNode(Rest)]
+    // We want to merge them back into a single text string.
+    
+    const parent = span.parentNode;
+    if (!parent) return;
+
+    // Get the bold text
+    const boldText = span.textContent;
+    
+    // The next sibling should be the rest of the word (normalNode)
+    const nextSibling = span.nextSibling;
+    
+    let restoredText = boldText;
+    
+    // If next sibling is text, merge it and remove it
+    if (nextSibling && nextSibling.nodeType === Node.TEXT_NODE) {
+      restoredText += nextSibling.nodeValue;
+      parent.removeChild(nextSibling);
+    }
+
+    // Replace the SPAN with a simple text node containing the full word
+    const textNode = document.createTextNode(restoredText);
+    parent.replaceChild(textNode, span);
+  });
+  
+  // Optional: Normalize the parent to merge adjacent text nodes we just created
+  // This cleans up the DOM so it looks like it was never touched.
+  document.body.normalize(); 
 }
 
 // ==============================================
