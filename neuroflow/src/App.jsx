@@ -13,7 +13,27 @@ function App() {
   const [editorVisible, setEditorVisible] = useState(false);
   const [energyLevel, setEnergyLevel] = useState(5);
   const [aiStatus, setAiStatus] = useState("Offline");
+  // ================= TASK STATE =================
+  const [tasks, setTasks] = useState([]);
+  const [taskInput, setTaskInput] = useState("");
+  const [completedTasks, setCompletedTasks] = useState([]);
+  const [showCompleted, setShowCompleted] = useState(false);
 
+  // ================= TASK HANDLERS =================
+  const addTask = () => {
+    if (!taskInput.trim()) return;
+    if (tasks.length >= 4) return;
+
+    setTasks(prev => [...prev, taskInput.trim()]);
+    setTaskInput("");
+  };
+
+  const removeTask = (index) => {
+    const taskToComplete = tasks[index];
+
+    setTasks(prev => prev.filter((_, i) => i !== index));
+    setCompletedTasks(prev => [...prev, taskToComplete]);
+  };
   useEffect(() => {
     // A. Start the AI immediately when Side Panel opens
     worker.postMessage({ type: "INIT_AI" });
@@ -117,21 +137,84 @@ function App() {
         </div>
       </section>
 
-      {/* Mood & Energy Section */}
+      {/* TASKS */}
       <section className="mb-6">
-         <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Energy Check-in</h2>
-         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-4">
-            <label className="block text-sm text-slate-600 mb-2 flex justify-between">
-              <span>Sluggish (1)</span> <span>Hyper-focused (10)</span>
-            </label>
-            <input 
-              type="range" min="1" max="10" value={energyLevel} 
-              onChange={(e) => setEnergyLevel(parseInt(e.target.value))}
-              className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+        <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">
+          Tasks
+        </h2>
+
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-3">
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={taskInput}
+              onChange={(e) => setTaskInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addTask()}
+              placeholder={tasks.length >= 4 ? "Task limit reached" : "Add a task…"}
+              disabled={tasks.length >= 4}
+              className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none disabled:bg-slate-100"
             />
-            <div className="text-center mt-2 font-bold text-blue-800">Energy Level: {energyLevel}</div>
-         </div>
-         <TaskSuggestion energyLevel={energyLevel} />
+            <button
+              onClick={addTask}
+              disabled={tasks.length >= 4}
+              className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold disabled:bg-slate-300"
+            >
+              Add
+            </button>
+          </div>
+
+          <ul className="space-y-2">
+            {tasks.map((task, index) => (
+              <li
+                key={index}
+                className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg"
+              >
+                <input
+                  type="checkbox"
+                  onClick={() => removeTask(index)}
+                  readOnly
+                  className="accent-blue-600 cursor-pointer"
+                />
+
+                <span className="text-sm text-slate-700">{task}</span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="text-xs text-slate-400 text-right">
+            {tasks.length}/4 tasks
+          </div>
+
+          <button
+            onClick={() => setShowCompleted(!showCompleted)}
+            className="text-xs text-blue-600 hover:underline w-full text-right"
+          >
+            {showCompleted ? "Hide completed tasks" : "View completed tasks"}
+          </button>
+
+          {showCompleted && completedTasks.length === 0 && (
+            <p className="text-xs text-slate-400 text-center mt-2">
+              No completed tasks yet
+            </p>
+          )}
+
+
+
+          {showCompleted && (
+            <ul className="mt-3 space-y-2">
+              {completedTasks.map((task, index) => (
+                <li
+                  key={index}
+                  className="text-sm text-slate-400 line-through bg-slate-50 px-3 py-2 rounded-lg"
+                >
+                  ✓ {task}
+                </li>
+              ))}
+            </ul>
+          )}
+
+        </div>
       </section>
 
       {/* Panic Button */}
