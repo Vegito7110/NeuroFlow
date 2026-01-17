@@ -33,7 +33,6 @@ body.neuroflow-clutter-free footer {
     width: 100vw; 
     height: 100vh;
     background: rgba(240, 245, 255, 0.98); /* Less transparent for total focus */
-    backdrop-filter: blur(15px);
     z-index: 2147483647 !important; /* MAX POSSIBLE Z-INDEX */
     display: flex; 
     flex-direction: column; 
