@@ -292,3 +292,150 @@ chrome.runtime.onMessage.addListener((request) => {
         case "TRIGGER_PANIC_AI": triggerPanicRoutine(request.value); break;
     }
 });
+
+// =========================================
+//  BEHAVIOR MONITOR (Rapid Scroll & Idle)
+// =========================================
+class BehaviorMonitor {
+    constructor() {
+        // Config
+        this.SCROLL_THRESHOLD = 2500; // Pixels per second to be considered "Rapid"
+        this.SCROLL_SUSTAIN_MS = 1500; // Must sustain speed for 1.5s
+        this.IDLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 Minutes
+
+        // State
+        this.lastScrollY = window.scrollY;
+        this.lastScrollTime = Date.now();
+        this.rapidScrollStartTime = null;
+        this.idleTimer = null;
+        this.isAlertVisible = false;
+
+        this.init();
+    }
+
+    init() {
+        // 1. Scroll Listener (Throttled for performance)
+        let scrollTimeout;
+        window.addEventListener('scroll', () => {
+            if (!scrollTimeout) {
+                scrollTimeout = setTimeout(() => {
+                    this.checkScrollSpeed();
+                    this.resetIdleTimer();
+                    scrollTimeout = null;
+                }, 100); // Check every 100ms
+            }
+        }, { passive: true });
+
+        // 2. Idle Listeners (Mouse/Keyboard resets timer)
+        ['mousemove', 'keydown', 'click'].forEach(evt => {
+            window.addEventListener(evt, () => this.resetIdleTimer(), { passive: true });
+        });
+
+        // 3. Start Idle Timer
+        this.resetIdleTimer();
+    }
+
+    checkScrollSpeed() {
+        const currentY = window.scrollY;
+        const currentTime = Date.now();
+        const timeDiff = currentTime - this.lastScrollTime;
+
+        if (timeDiff === 0) return;
+
+        // Calculate Speed (px/sec)
+        const distance = Math.abs(currentY - this.lastScrollY);
+        const speed = (distance / timeDiff) * 1000;
+
+        // Logic: Is this rapid?
+        if (speed > this.SCROLL_THRESHOLD) {
+            if (!this.rapidScrollStartTime) {
+                this.rapidScrollStartTime = currentTime;
+            } else {
+                // Have we been scrolling fast for X seconds?
+                const duration = currentTime - this.rapidScrollStartTime;
+                if (duration > this.SCROLL_SUSTAIN_MS) {
+                    this.triggerAlert("RAPID_SCROLL");
+                    this.rapidScrollStartTime = null; // Reset to avoid spamming
+                }
+            }
+        } else {
+            // Speed dropped, reset tracker
+            this.rapidScrollStartTime = null;
+        }
+
+        this.lastScrollY = currentY;
+        this.lastScrollTime = currentTime;
+    }
+
+    resetIdleTimer() {
+        if (this.idleTimer) clearTimeout(this.idleTimer);
+        
+        // Start new timer
+        this.idleTimer = setTimeout(() => {
+            this.triggerAlert("IDLE");
+        }, this.IDLE_THRESHOLD_MS);
+    }
+
+    triggerAlert(type) {
+        if (this.isAlertVisible) return; // Don't stack alerts
+
+        let title, body, showPanicBtn;
+
+        if (type === "RAPID_SCROLL") {
+            title = "Whoa, slowing down?";
+            body = "We noticed some rapid scrolling. Feeling a bit overwhelmed or just looking for something?";
+            showPanicBtn = true;
+        } else {
+            title = "Still with us?";
+            body = "You've been on this screen for a while. Take a deep breath or stretch?";
+            showPanicBtn = false;
+        }
+
+        this.showSoftAlertUI(title, body, showPanicBtn);
+    }
+
+    showSoftAlertUI(title, body, showPanicBtn) {
+        this.isAlertVisible = true;
+        
+        // Remove existing if any
+        const existing = document.getElementById('neuroflow-soft-alert');
+        if (existing) existing.remove();
+
+        const alertDiv = document.createElement('div');
+        alertDiv.id = 'neuroflow-soft-alert';
+        alertDiv.innerHTML = `
+            <div class="neuroflow-alert-title">${title}</div>
+            <div class="neuroflow-alert-body">${body}</div>
+            <div class="neuroflow-alert-actions">
+                ${showPanicBtn ? '<button id="nf-panic-btn" class="neuroflow-btn-primary">Panic Mode</button>' : ''}
+                <button id="nf-dismiss-btn" class="neuroflow-btn-ghost">I'm Good</button>
+            </div>
+        `;
+
+        document.body.appendChild(alertDiv);
+
+        // Animate In
+        setTimeout(() => alertDiv.classList.add('visible'), 10);
+
+        // Handlers
+        document.getElementById('nf-dismiss-btn').addEventListener('click', () => {
+            alertDiv.classList.remove('visible');
+            setTimeout(() => {
+                alertDiv.remove();
+                this.isAlertVisible = false;
+            }, 400);
+        });
+
+        if (showPanicBtn) {
+            document.getElementById('nf-panic-btn').addEventListener('click', () => {
+                // Trigger your existing Panic Overlay logic
+                togglePanicOverlay(true);
+                alertDiv.remove();
+                this.isAlertVisible = false;
+            });
+        }
+    }
+}
+
+// Initialize
+new BehaviorMonitor();

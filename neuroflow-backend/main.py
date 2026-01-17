@@ -20,28 +20,36 @@ load_dotenv()
 
 # 2. Verify API Key is present
 if not os.getenv("GROQ_API_KEY"):
-    raise ValueError("CRITICAL ERROR: GROQ_API_KEY is missing from .env file or environment variables.")
+    print("⚠️ CRITICAL WARNING: GROQ_API_KEY is missing from environment variables!")
 
-# 3. Define the Model
-# "llama3-8b-8192" is DEPRECATED. 
-# We use "llama-3.1-8b-instant" which is the current fast/efficient standard.
-# Other options: "llama-3.3-70b-versatile" (slower but smarter)
+# 3. Define the Model (Fast & Efficient)
 LLM_MODEL = "llama-3.1-8b-instant"
 
 # --- PART 1: LANGGRAPH AGENT SETUP ---
 
-# NEW: Define Task Types
 class AgentState(TypedDict):
-    url: str
-    # Added "smart_extract" and "simplify"
-    task_type: Literal["summarize", "smart_extract", "simplify"] 
+    url: Optional[str]               # Optional because 'breakdown' doesn't need it
+    user_input: Optional[str]        # Optional because 'summarize' doesn't need it
+    task_type: Literal["summarize", "breakdown", "smart_extract", "simplify"] 
     clean_content: Optional[str]
     final_output: Optional[str]
     error: Optional[str]
 
 def scraper_node(state: AgentState):
-    """Node 1: Scrapes and cleans the website."""
-    url = state["url"]
+    """
+    Node 1: Scrapes and cleans the website OR passes manual input.
+    """
+    # PATH A: MANUAL INPUT (Task Breakdown)
+    if state["task_type"] == "breakdown":
+        if not state.get("user_input"):
+             return {"error": "User input is required for breakdown tasks."}
+        return {"clean_content": state["user_input"]}
+
+    # PATH B: WEB SCRAPING (Summarize, Simplify, Extract)
+    url = state.get("url")
+    if not url:
+        return {"error": "URL is required for web processing tasks."}
+
     try:
         # Use a generic user agent to avoid basic blocking
         headers = {
@@ -58,9 +66,7 @@ def scraper_node(state: AgentState):
             
         text_content = soup.get_text(separator="\n\n", strip=True)
         
-        # --- FIX IS HERE ---
-        # Reduced from 25,000 to 15,000 to stay under Groq's 6,000 TPM limit
-        # 15,000 chars is roughly 3,750 tokens, which is safe.
+        # Truncate to stay within safe token limits (approx 3,750 tokens)
         if len(text_content) > 15000:
             text_content = text_content[:15000] + "\n...[Content Truncated]"
 
@@ -69,59 +75,45 @@ def scraper_node(state: AgentState):
     except Exception as e:
         return {"error": str(e), "clean_content": None}
 
-def extractor_node(state: AgentState):
-    """Smart Clutter Free: Extracts only main article content as Markdown."""
+def processor_node(state: AgentState):
+    """
+    Node 2: The LLM Brain. 
+    Handles Summarization, Breakdown, Smart Extraction, and Simplification.
+    """
     content = state.get("clean_content")
-    if not content: return {"error": "No content"}
-    
-    llm = ChatGroq(temperature=0, model=LLM_MODEL, api_key=os.getenv("GROQ_API_KEY"))
-    
-    # Instructions to reconstruct the article cleanly
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an expert content extractor. Extract only the main article text."),
-        ("user", "Convert the following chaotic web text into clean, formatted Markdown. Remove ads, navigation, sidebars, and promotional fluff. Keep the original meaning intact.\n\nTEXT:\n{text}")
-    ])
-    
-    chain = prompt | llm
-    response = chain.invoke({"text": content})
-    return {"final_output": response.content}
-
-def simplifier_node(state: AgentState):
-    """Smart Reader: Rewrites text to be simpler and highlights key points."""
-    content = state.get("clean_content")
-    if not content: return {"error": "No content"}
-
-    llm = ChatGroq(temperature=0, model=LLM_MODEL, api_key=os.getenv("GROQ_API_KEY"))
-    
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a cognitive accessibility assistant."),
-        ("user", "Rewrite the following text to be easier to read (Grade 8 level). Use short paragraphs. **Bold** the most important key phrase in every paragraph for emphasis.\n\nTEXT:\n{text}")
-    ])
-    
-    chain = prompt | llm
-    response = chain.invoke({"text": content})
-    return {"final_output": response.content}
-
-def summarizer_node(state: AgentState):
-    """Node 2: Summarizes the content using Groq."""
-    content = state.get("clean_content")
+    task = state.get("task_type")
     
     # Fail fast if previous step failed
     if not content or state.get("error"):
-        return {"final_output": "Error: Could not retrieve content to summarize."}
+        return {"final_output": "Error: Could not retrieve content to process."}
 
     try:
-        # Initialize Groq LLM
-        # Note: We use 'model' instead of 'model_name' for better compatibility with newer LangChain versions
         llm = ChatGroq(
-            temperature=0, 
+            temperature=0.2, 
             model=LLM_MODEL,
-            api_key=os.getenv("GROQ_API_KEY") # Explicitly passing key ensures clarity
+            api_key=os.getenv("GROQ_API_KEY")
         )
         
+        # --- DYNAMIC PROMPT SELECTION ---
+        if task == "breakdown":
+            system_msg = "You are a productivity expert. Break down complex tasks into small, actionable steps."
+            user_msg = "Break down the following task into 3-5 clear, bite-sized sub-steps. Return ONLY a bulleted list (e.g. - Step 1):\n\nTASK: {text}"
+            
+        elif task == "smart_extract":
+            system_msg = "You are an expert content extractor."
+            user_msg = "Convert the following chaotic web text into clean, formatted Markdown. Remove ads, navigation, and promotional fluff. Keep the original meaning intact.\n\nTEXT:\n{text}"
+            
+        elif task == "simplify":
+            system_msg = "You are a cognitive accessibility assistant."
+            user_msg = "Rewrite the following text to be easier to read (Grade 8 level). Use short paragraphs. **Bold** the most important key phrase in every paragraph.\n\nTEXT:\n{text}"
+            
+        else: # Default: Summarize
+            system_msg = "You are a helpful assistant that summarizes web content."
+            user_msg = "Analyze the following text and provide a summary in 3-5 concise bullet points. Focus on the main insights.\n\nTEXT:\n{text}"
+
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a helpful assistant that summarizes web content."),
-            ("user", "Analyze the following text and provide a summary in 3-5 concise bullet points. Focus on the main insights.\n\nTEXT:\n{text}")
+            ("system", system_msg),
+            ("user", user_msg)
         ])
         
         chain = prompt | llm
@@ -132,38 +124,21 @@ def summarizer_node(state: AgentState):
     except Exception as e:
         return {"final_output": f"LLM Processing Error: {str(e)}"}
 
-def route_next_step(state: AgentState):
-    if state.get("error"): return END
-    # Routing logic based on task_type
-    if state["task_type"] == "smart_extract": return "extractor"
-    if state["task_type"] == "simplify": return "simplifier"
-    return "summarizer"
 
-# UPDATE GRAPH
+# --- BUILD THE GRAPH ---
 workflow = StateGraph(AgentState)
+
+# Add Nodes
 workflow.add_node("scraper", scraper_node)
-workflow.add_node("summarizer", summarizer_node)
-workflow.add_node("extractor", extractor_node)   # NEW
-workflow.add_node("simplifier", simplifier_node) # NEW
+workflow.add_node("processor", processor_node)
 
+# Set Flow
 workflow.set_entry_point("scraper")
-
-workflow.add_conditional_edges(
-    "scraper",
-    route_next_step,
-    {
-        "extractor": "extractor",
-        "simplifier": "simplifier",
-        "summarizer": "summarizer",
-        END: END
-    }
-)
-
-workflow.add_edge("extractor", END)
-workflow.add_edge("simplifier", END)
-workflow.add_edge("summarizer", END)
+workflow.add_edge("scraper", "processor")
+workflow.add_edge("processor", END)
 
 agent_app = workflow.compile()
+
 
 # --- PART 2: FASTAPI SERVER ---
 
@@ -180,37 +155,36 @@ app.add_middleware(
 
 # Define the Input Model
 class RequestBody(BaseModel):
-    url: str
-    task_type: Literal["summarize", "smart_extract", "simplify"]
+    url: Optional[str] = None        # Optional (defaults to None)
+    user_input: Optional[str] = None # Optional (defaults to None)
+    task_type: Literal["summarize", "breakdown", "smart_extract", "simplify"]
 
 @app.post("/process")
-async def process_url(request: RequestBody):
+async def process_request(request: RequestBody):
     """
-    Endpoint to process a URL.
-    Payload: { "url": "https://example.com", "task_type": "summarize" }
+    Unified Endpoint.
     """
     try:
         results = agent_app.invoke({
             "url": request.url, 
+            "user_input": request.user_input,
             "task_type": request.task_type
         })
         
+        # Check for scraping errors
         if results.get("error"):
-            # If the scraping failed, we return a 400 error
-            raise HTTPException(status_code=400, detail=results["error"])
+            # We return 200 with error field so frontend handles it gracefully
+            return {
+                "status": "error",
+                "message": results["error"],
+                "data": None
+            }
 
-        response_data = {
+        return {
             "status": "success",
             "task": request.task_type,
+            "data": results["final_output"]
         }
-
-        # Format the output based on task
-        if request.task_type == "clutter_free":
-            response_data["data"] = results.get("clean_content", "No content found")
-        else:
-            response_data["data"] = results.get("final_output", "No summary generated")
-
-        return response_data
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

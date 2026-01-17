@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Eye, Layers, AlertCircle, Brain, PenTool, FileText, Loader2, Hourglass } from 'lucide-react';
+import { Eye, Layers, AlertCircle, Brain, PenTool, FileText, Loader2, Hourglass, X, ListChecks } from 'lucide-react';
 import AIWorker from './worker?worker';
 import { useChromeStorage } from './hooks/useChromeStorage'; 
 
@@ -17,15 +17,22 @@ function App() {
   // ================= TRANSIENT STATE =================
   const [aiStatus, setAiStatus] = useState("Offline");
   
-  // NEW: Cooldown State to block rapid clicks
-  // Format: { "BIONIC": true, "CLUTTER": false }
+  // Cooldown State
   const [cooldowns, setCooldowns] = useState({});
 
+  // Summary State
   const [summary, setSummary] = useState(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState(null);
+  
+  // Task State
   const [taskInput, setTaskInput] = useState("");
   const [showCompleted, setShowCompleted] = useState(false);
+
+  // --- NEW: TASK BREAKDOWN STATE ---
+  const [selectedTask, setSelectedTask] = useState(null); // The task currently open in modal
+  const [subSteps, setSubSteps] = useState(null);       // The AI result text
+  const [isBreakingDown, setIsBreakingDown] = useState(false); // Loading state for breakdown
 
   // ================= WORKER INITIALIZATION (DELAYED) =================
   useEffect(() => {
@@ -82,44 +89,35 @@ function App() {
     }
   };
 
-  // --- NEW: SAFE TOGGLE FUNCTION ---
   const handleSafeToggle = (setter, state, actionName, cooldownKey) => {
-    // 1. If currently cooling down, STOP here. Do nothing.
     if (cooldowns[cooldownKey]) return;
-
-    // 2. Perform the toggle
     const newState = !state;
     setter(newState); 
     sendMessageToContentScript(actionName, newState);
-
-    // 3. Activate Cooldown
     setCooldowns(prev => ({ ...prev, [cooldownKey]: true }));
-
-    // 4. Remove Cooldown after 10 seconds
     setTimeout(() => {
       setCooldowns(prev => ({ ...prev, [cooldownKey]: false }));
     }, 10000); 
   };
 
-  // ================= API HANDLER =================
+  // ================= API HANDLERS =================
+  
+  // 1. Summary Handler
   const handleSummarize = async () => {
     setIsSummarizing(true);
     setSummaryError(null);
     setSummary(null);
-
     try {
       let currentUrl = "https://example.com"; 
       if (typeof chrome !== "undefined" && chrome.tabs) {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab?.url) currentUrl = tab.url;
       }
-
       const response = await fetch("http://localhost:8000/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: currentUrl, task_type: "summarize" })
       });
-
       const data = await response.json();
       if (data.status === "success") setSummary(data.data); 
       else setSummaryError(data.detail || "Failed to generate summary");
@@ -131,6 +129,37 @@ function App() {
     }
   };
 
+  // 2. NEW: Task Breakdown Handler
+  const handleTaskClick = async (taskText) => {
+    setSelectedTask(taskText);
+    setSubSteps(null);
+    setIsBreakingDown(true);
+
+    try {
+      // We send 'user_input' for breakdown tasks, url is ignored by backend
+      const response = await fetch("http://localhost:8000/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          task_type: "breakdown",
+          user_input: taskText 
+        })
+      });
+      const data = await response.json();
+      if (data.status === "success") {
+        setSubSteps(data.data);
+      } else {
+        setSubSteps("Failed to break down task. Please try again.");
+      }
+    } catch (err) {
+      console.error(err);
+      setSubSteps("Error connecting to AI. Is the backend running?");
+    } finally {
+      setIsBreakingDown(false);
+    }
+  };
+
+  // ================= TASK LIST HANDLERS =================
   const addTask = () => {
     if (!taskInput.trim()) return;
     if (tasks.length >= 4) return;
@@ -145,7 +174,7 @@ function App() {
   };
 
   return (
-    <div className="p-4 bg-slate-50 min-h-screen font-sans w-full max-w-md mx-auto">
+    <div className="p-4 bg-slate-50 min-h-screen font-sans w-full max-w-md mx-auto relative">
       {/* Header */}
       <header className="flex items-center justify-between mb-6 border-b pb-4 border-slate-200">
         <div className="flex items-center gap-2">
@@ -199,7 +228,7 @@ function App() {
           </div>
           <ToggleBtn 
             active={bionicMode} 
-            disabled={cooldowns["BIONIC"]} // Pass Disabled State
+            disabled={cooldowns["BIONIC"]} 
             onClick={() => handleSafeToggle(setBionicMode, bionicMode, "TOGGLE_BIONIC", "BIONIC")} 
           />
         </div>
@@ -212,7 +241,7 @@ function App() {
           </div>
           <ToggleBtn 
             active={clutterFreeMode} 
-            disabled={cooldowns["CLUTTER"]} // Pass Disabled State
+            disabled={cooldowns["CLUTTER"]} 
             onClick={() => handleSafeToggle(setClutterFreeMode, clutterFreeMode, "TOGGLE_CLUTTER_FREE", "CLUTTER")} 
           />
         </div>
@@ -226,7 +255,6 @@ function App() {
                 <PenTool size={20} className="text-orange-500" />
                 <span className="text-slate-700 font-medium">Smart Editor Overlay</span>
             </div>
-            {/* Editor doesn't usually destroy DOM, so we can keep the standard toggle or add buffer if needed */}
             <button 
                 onClick={() => handleSafeToggle(setEditorVisible, editorVisible, "TOGGLE_EDITOR", "EDITOR")}
                 className={`px-3 py-1 rounded-lg text-sm font-bold transition-colors ${editorVisible ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'}`}
@@ -236,7 +264,7 @@ function App() {
         </div>
       </section>
 
-      {/* TASKS (Unchanged) */}
+      {/* --- UPDATED TASKS SECTION --- */}
       <section className="mb-6">
         <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Tasks</h2>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-3">
@@ -244,20 +272,72 @@ function App() {
             <input type="text" value={taskInput} onChange={(e) => setTaskInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder={tasks.length >= 4 ? "Task limit reached" : "Add a task…"} disabled={tasks.length >= 4} className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none disabled:bg-slate-100" />
             <button onClick={addTask} disabled={tasks.length >= 4} className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold disabled:bg-slate-300">Add</button>
           </div>
+          
           <ul className="space-y-2">
             {tasks.map((task, index) => (
-              <li key={index} className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg">
-                <input type="checkbox" onClick={() => removeTask(index)} readOnly className="accent-blue-600 cursor-pointer" />
-                <span className="text-sm text-slate-700">{task}</span>
+              <li key={index} className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg group">
+                {/* Checkbox handles removal, prevent it from triggering the modal */}
+                <input 
+                  type="checkbox" 
+                  onClick={(e) => { e.stopPropagation(); removeTask(index); }} 
+                  readOnly 
+                  className="accent-blue-600 cursor-pointer" 
+                />
+                
+                {/* Clickable Task Text */}
+                <span 
+                    onClick={() => handleTaskClick(task)}
+                    className="text-sm text-slate-700 flex-1 cursor-pointer hover:text-blue-600 transition-colors flex items-center justify-between"
+                    title="Click for AI Breakdown"
+                >
+                    {task}
+                    <ListChecks size={14} className="text-slate-300 group-hover:text-blue-400" />
+                </span>
               </li>
             ))}
           </ul>
+
           <div className="text-xs text-slate-400 text-right">{tasks.length}/4 tasks</div>
           <button onClick={() => setShowCompleted(!showCompleted)} className="text-xs text-blue-600 hover:underline w-full text-right">{showCompleted ? "Hide completed tasks" : "View completed tasks"}</button>
           {showCompleted && <ul className="mt-3 space-y-2">{completedTasks.map((task, index) => (<li key={index} className="text-sm text-slate-400 line-through bg-slate-50 px-3 py-2 rounded-lg">✓ {task}</li>))}</ul>}
         </div>
       </section>
 
+      {/* --- NEW: TASK BREAKDOWN MODAL --- */}
+      {selectedTask && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/10 backdrop-blur-[1px]">
+          <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl border border-slate-200 p-5 animate-in fade-in zoom-in duration-200">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-2">
+                <div>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Breaking Down</h3>
+                    <p className="text-slate-800 font-semibold text-sm line-clamp-1">{selectedTask}</p>
+                </div>
+                <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-slate-600">
+                    <X size={20} />
+                </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="min-h-[100px]">
+                {isBreakingDown ? (
+                    <div className="flex flex-col items-center justify-center h-24 text-slate-500 gap-2">
+                        <Loader2 className="animate-spin text-blue-500" size={24} />
+                        <span className="text-xs">Thinking step-by-step...</span>
+                    </div>
+                ) : (
+                    <div className="text-sm text-slate-700 whitespace-pre-line leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100 max-h-[300px] overflow-y-auto">
+                        {subSteps}
+                    </div>
+                )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Panic Button */}
       <section>
         <button onClick={() => sendMessageToContentScript("TRIGGER_PANIC_AI")} className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-95">
           <AlertCircle size={24} /> Wait, I'm Overwhelmed!
@@ -267,11 +347,11 @@ function App() {
   );
 }
 
-// Updated Toggle Button to show "Disabled" state
+// Toggle Button Component
 const ToggleBtn = ({ active, disabled, onClick }) => (
     <button 
       onClick={onClick}
-      disabled={disabled} // Actual Disable
+      disabled={disabled} 
       className={`w-12 h-6 rounded-full p-1 transition-colors relative 
         ${disabled ? 'bg-slate-200 cursor-not-allowed opacity-60' : (active ? 'bg-blue-600' : 'bg-slate-300')}
       `}>
