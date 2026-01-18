@@ -89,7 +89,7 @@ function App() {
   };
 
   // --- 1. SAFE TOGGLE (Fixed: Removed manual message sending) ---
-  const handleSafeToggle = (setter, state, cooldownKey, duration = 6000) => {
+  const handleSafeToggle = (setter, state, cooldownKey, duration = 0) => {
     if (cooldowns[cooldownKey]) return;
     
     // Just update state. The useEffect above will handle the messaging.
@@ -212,7 +212,7 @@ function App() {
             {cooldowns["BIONIC"] ? <Hourglass size={20} className="text-orange-400 animate-pulse" /> : <Eye size={20} className="text-slate-600" />}
             <span className="text-slate-700 font-medium">Bionic Reading</span>
           </div>
-          <ToggleBtn active={bionicMode} disabled={cooldowns["BIONIC"]} onClick={() => handleSafeToggle(setBionicMode, bionicMode, "BIONIC", 6000)} />
+          <ToggleBtn active={bionicMode} disabled={cooldowns["BIONIC"]} onClick={() => handleSafeToggle(setBionicMode, bionicMode, "BIONIC", 0)} />
         </div>
 
         {/* Clutter-Free Toggle */}
