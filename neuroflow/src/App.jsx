@@ -65,9 +65,7 @@ function App() {
     };
   }, []); 
 
-  // ================= THE SYNC ENGINE (Crucial Fix) =================
-  // This is the ONLY place where messages are sent. 
-  // It guarantees the Content Script always matches the React State.
+  // ================= SYNC ENGINE =================
   useEffect(() => {
     sendMessageToContentScript("TOGGLE_BIONIC", bionicMode);
     sendMessageToContentScript("TOGGLE_CLUTTER_FREE", clutterFreeMode);
@@ -80,31 +78,19 @@ function App() {
       try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab?.id) {
-          chrome.tabs.sendMessage(tab.id, { action, value }).catch(() => {
-            // Ignore errors if the content script isn't ready yet
-          });
+          chrome.tabs.sendMessage(tab.id, { action, value }).catch(() => {});
         }
       } catch (e) { console.error(e); }
     }
   };
 
-  // --- 1. SAFE TOGGLE (Fixed: Removed manual message sending) ---
-  const handleSafeToggle = (setter, state, cooldownKey, duration = 0) => {
-    if (cooldowns[cooldownKey]) return;
-    
-    // Just update state. The useEffect above will handle the messaging.
+  const handleToggle = (setter, state, cooldownKey, duration = 2000) => {
+    if (cooldownKey && cooldowns[cooldownKey]) return;
     setter(!state); 
-    
-    // Start Cooldown
-    setCooldowns(prev => ({ ...prev, [cooldownKey]: true }));
-    setTimeout(() => {
-      setCooldowns(prev => ({ ...prev, [cooldownKey]: false }));
-    }, duration); 
-  };
-
-  // --- 2. SIMPLE TOGGLE (Fixed: Removed manual message sending) ---
-  const handleSimpleToggle = (setter, state) => {
-    setter(!state);
+    if (cooldownKey) {
+      setCooldowns(prev => ({ ...prev, [cooldownKey]: true }));
+      setTimeout(() => setCooldowns(prev => ({ ...prev, [cooldownKey]: false })), duration); 
+    }
   };
 
   // ================= API HANDLERS =================
@@ -169,7 +155,6 @@ function App() {
 
   return (
     <div className="p-4 bg-slate-50 min-h-screen font-sans w-full max-w-md mx-auto relative">
-      {/* Header */}
       <header className="flex items-center justify-between mb-6 border-b pb-4 border-slate-200">
         <div className="flex items-center gap-2">
             <Brain className="text-blue-600" size={28} />
@@ -178,7 +163,7 @@ function App() {
         <span className="text-xs font-mono text-slate-500">{aiStatus}</span>
       </header>
 
-      {/* --- AI SUMMARY --- */}
+      {/* SUMMARY */}
       <section className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-6">
         <div className="flex items-center gap-2 mb-3">
             <FileText size={20} className="text-purple-600" />
@@ -202,30 +187,28 @@ function App() {
         )}
       </section>
 
-      {/* --- READING TOOLS --- */}
+      {/* READING TOOLS */}
       <section className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-6 space-y-4">
         <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Visual & Reading</h2>
         
-        {/* Bionic Toggle */}
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             {cooldowns["BIONIC"] ? <Hourglass size={20} className="text-orange-400 animate-pulse" /> : <Eye size={20} className="text-slate-600" />}
             <span className="text-slate-700 font-medium">Bionic Reading</span>
           </div>
-          <ToggleBtn active={bionicMode} disabled={cooldowns["BIONIC"]} onClick={() => handleSafeToggle(setBionicMode, bionicMode, "BIONIC", 0)} />
+          <ToggleBtn active={bionicMode} disabled={cooldowns["BIONIC"]} onClick={() => handleToggle(setBionicMode, bionicMode, "BIONIC", 3000)} />
         </div>
 
-        {/* Clutter-Free Toggle */}
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
             {cooldowns["CLUTTER"] ? <Hourglass size={20} className="text-orange-400 animate-pulse" /> : <Layers size={20} className="text-slate-600" />}
             <span className="text-slate-700 font-medium">Clutter-Free</span>
           </div>
-          <ToggleBtn active={clutterFreeMode} disabled={cooldowns["CLUTTER"]} onClick={() => handleSafeToggle(setClutterFreeMode, clutterFreeMode, "CLUTTER", 6000)} />
+          <ToggleBtn active={clutterFreeMode} disabled={cooldowns["CLUTTER"]} onClick={() => handleToggle(setClutterFreeMode, clutterFreeMode, "CLUTTER", 3000)} />
         </div>
       </section>
 
-      {/* --- WRITING ASSISTANT --- */}
+      {/* WRITING ASSISTANT */}
       <section className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-6">
         <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Writing Companion</h2>
         <div className="flex items-center justify-between">
@@ -233,13 +216,13 @@ function App() {
                 <PenTool size={20} className="text-orange-500" />
                 <span className="text-slate-700 font-medium">Smart Editor Overlay</span>
             </div>
-            <button onClick={() => handleSimpleToggle(setEditorVisible, editorVisible)} className={`px-3 py-1 rounded-lg text-sm font-bold transition-colors ${editorVisible ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
+            <button onClick={() => handleToggle(setEditorVisible, editorVisible)} className={`px-3 py-1 rounded-lg text-sm font-bold transition-colors ${editorVisible ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'}`}>
                 {editorVisible ? 'Active' : 'Enable'}
             </button>
         </div>
       </section>
 
-      {/* --- TASKS --- */}
+      {/* TASKS */}
       <section className="mb-6">
         <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Tasks</h2>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-3">
@@ -262,6 +245,7 @@ function App() {
         </div>
       </section>
 
+      {/* MODAL */}
       {selectedTask && (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/10 backdrop-blur-[1px]">
           <div className="bg-white w-full max-w-sm rounded-xl shadow-2xl border border-slate-200 p-5 animate-in fade-in zoom-in duration-200">

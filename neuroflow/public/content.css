@@ -9,13 +9,13 @@ b { font-weight: 700 !important; }
 
 /* 2. CLUTTER FREE MODE */
 body.neuroflow-clutter-free {
-    max-width: 800px !important;
+    max-width: 900px !important;
     margin: 0 auto !important;
     padding: 40px 20px !important;
-    background-color: #fdf6e3 !important;
+    background-color: #fdf6e3 !important; 
     color: #2d3436 !important;
-    font-family: 'OpenDyslexic', 'Comic Sans MS', sans-serif !important;
-    line-height: 2 !important;
+    font-family: 'OpenDyslexic', 'Segoe UI', 'Comic Sans MS', sans-serif !important;
+    line-height: 1.8 !important;
     font-size: 20px !important;
     overflow-x: hidden !important;
 }
@@ -23,9 +23,13 @@ body.neuroflow-clutter-free iframe,
 body.neuroflow-clutter-free aside,
 body.neuroflow-clutter-free nav,
 body.neuroflow-clutter-free header,
+body.neuroflow-clutter-free footer,
 body.neuroflow-clutter-free .ad,
 body.neuroflow-clutter-free .ads,
-body.neuroflow-clutter-free footer {
+body.neuroflow-clutter-free .advertisement,
+body.neuroflow-clutter-free .social-share,
+body.neuroflow-clutter-free #sidebar,
+body.neuroflow-clutter-free [role="complementary"] {
     display: none !important;
 }
 
@@ -52,4 +56,25 @@ body.neuroflow-clutter-free footer {
 @keyframes breathe {
     0%, 100% { transform: scale(1); opacity: 0.8; }
     50% { transform: scale(1.5); opacity: 1; }
+}
+
+/* 4. SUGGESTION BUBBLE */
+#neuroflow-suggestion-bubble {
+    position: absolute;
+    z-index: 2147483646;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 14px;
+    color: #334155;
+    pointer-events: none;
+    animation: slideUp 0.2s ease-out;
+    max-width: 300px;
+}
+@keyframes slideUp {
+    from { transform: translateY(5px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
 }
