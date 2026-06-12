@@ -1,4 +1,4 @@
-# 🧠 NeuroFlow
+#  NeuroFlow
 
 **NeuroFlow** is a Chrome extension designed to support neurodivergent users — including those with ADHD, dyslexia, and anxiety — by making the web easier to read, write, and navigate.
 
